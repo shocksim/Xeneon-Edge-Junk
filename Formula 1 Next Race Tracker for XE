@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Tracker</title>
+    <style>
+        :root {
+            --bg-color: #101014;
+            --accent: #ff1801;
+            --neon: #00f2ff;
+            --text-main: #ffffff;
+            --text-sub: #6e6e73;
+            --font-stack: 'Titillium Web', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;1,700&display=swap');
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-stack);
+            overflow: hidden;
+            height: 100vh;
+            display: flex; flex-direction: column;
+            position: relative;
+        }
+
+        /* --- Track Container --- */
+        #track-container {
+            position: absolute;
+            top: 55%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%; height: 50%;
+            z-index: 0;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* The SVG itself */
+        #track-svg {
+            width: 100%; height: 100%;
+            fill: none;
+            stroke: var(--neon);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            /* Neon Glow */
+            filter: drop-shadow(0 0 5px var(--neon)) drop-shadow(0 0 15px rgba(0, 242, 255, 0.4));
+            animation: pulsePath 4s ease-in-out infinite;
+        }
+
+        @keyframes pulsePath {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; filter: drop-shadow(0 0 8px var(--neon)) drop-shadow(0 0 25px rgba(0, 242, 255, 0.6)); }
+            100% { opacity: 0.8; }
+        }
+
+        /* --- Header --- */
+        header {
+            padding: 20px 6vw;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 10;
+            border-bottom: 2px solid var(--accent);
+            background: linear-gradient(180deg, rgba(16,16,20,0.95) 0%, rgba(16,16,20,0) 100%);
+        }
+
+        .logo { font-size: 24px; font-weight: 900; font-style: italic; letter-spacing: -1px; }
+        .logo span { color: var(--accent); }
+        .round-pill { 
+            font-size: 11px; font-weight: 700; background: #fff; color: #000; 
+            padding: 2px 8px; border-radius: 2px; text-transform: uppercase; letter-spacing: 1px;
+        }
+
+        /* --- Main Content --- */
+        #main {
+            flex-grow: 1; z-index: 10; display: flex; flex-direction: column;
+            justify-content: flex-start; align-items: center; text-align: center;
+            padding-top: 40px;
+        }
+
+        #race-name {
+            font-size: 28px; font-weight: 900; text-transform: uppercase; 
+            font-style: italic; line-height: 1; margin-bottom: 8px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+        }
+
+        #race-loc {
+            font-size: 12px; color: #ccc; text-transform: uppercase; 
+            letter-spacing: 2px; font-weight: 600; margin-bottom: 20px;
+            background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 4px;
+        }
+
+        /* --- Timer --- */
+        .timer-row {
+            display: flex; gap: 20px;
+            margin-top: auto; margin-bottom: 40px; /* Push to bottom */
+        }
+
+        .t-unit { display: flex; flex-direction: column; align-items: center; min-width: 50px; }
+        .t-val { 
+            font-size: 42px; font-weight: 700; font-variant-numeric: tabular-nums; 
+            line-height: 1; text-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+        .t-label { font-size: 10px; text-transform: uppercase; color: var(--accent); margin-top: 5px; font-weight: 700; letter-spacing: 1px; }
+
+        /* --- Live Mode --- */
+        #live-box { display: none; flex-direction: column; align-items: center; margin-top: auto; margin-bottom: 40px; }
+        .live-tag {
+            background: var(--accent); color: #fff; font-size: 12px; font-weight: 900;
+            padding: 4px 12px; border-radius: 2px; animation: pulse 1s infinite; margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+        .lap-count { font-size: 56px; font-weight: 900; font-style: italic; line-height: 0.9; }
+        .lap-sub { font-size: 12px; color: var(--text-sub); letter-spacing: 2px; text-transform: uppercase; margin-top: 5px; }
+
+        .message { font-size: 14px; color: var(--text-sub); margin-top: 50px; }
+
+        .footer {
+            position: fixed; bottom: 12px; right: 15px; z-index: 10;
+            font-size: 9px; color: rgba(255,255,255,0.15); pointer-events: none;
+        }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div id="track-container">
+    <svg id="track-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+        <path id="track-path" d="" />
+    </svg>
+</div>
+
+<header>
+    <div class="logo">F1<span>NEXT</span></div>
+    <div id="round" class="round-pill">--</div>
+</header>
+
+<div id="main">
+    <div id="loading" class="message">Initializing Telemetry...</div>
+
+    <div id="pre-race" style="display:none; flex-direction:column; align-items:center; height:100%;">
+        <div id="race-name">Loading...</div>
+        <div id="race-loc">Loading...</div>
+        
+        <div class="timer-row">
+            <div class="t-unit">
+                <span class="t-val" id="d">00</span>
+                <span class="t-label">Days</span>
+            </div>
+            <div class="t-unit">
+                <span class="t-val" id="h">00</span>
+                <span class="t-label">Hrs</span>
+            </div>
+            <div class="t-unit">
+                <span class="t-val" id="m">00</span>
+                <span class="t-label">Min</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="live-box">
+        <div class="live-tag">Race in Progress</div>
+        <div class="lap-count">LAP <span id="cur-lap">1</span>/<span id="tot-lap">--</span></div>
+        <div class="lap-sub">Live Tracker</div>
+    </div>
+</div>
+
+<div class="footer">Jolpica F1 API | Vector Data</div>
+
+<script>
+    const API = "https://api.jolpi.ca/ergast/f1/current/next.json";
+
+    // --- TRACK DATABASE (SVG PATHS) ---
+    // These are simplified vector paths for the major tracks. 
+    // This allows them to load instantly without external images.
+    const TRACK_PATHS = {
+        // Bahrain
+        "bahrain": "M30,70 L25,65 L25,60 L30,55 L40,55 L45,50 L55,50 L60,55 L65,50 L75,50 L80,55 L80,65 L75,70 L65,70 L60,75 L50,75 L45,80 L30,80 Z",
+        
+        // Jeddah
+        "jeddah": "M20,20 Q30,15 40,20 T60,30 T80,40 Q85,50 80,60 T60,80 T40,85 Q20,80 20,70 Z",
+        
+        // Melbourne
+        "albert_park": "M30,30 L70,30 L80,40 L70,60 L60,60 L50,70 L40,70 L30,60 Z",
+        
+        // Suzuka (Figure 8)
+        "suzuka": "M20,60 C20,40 40,40 50,50 C60,60 80,60 80,40 C80,20 60,20 50,30 C40,40 20,40 20,60 Z",
+        
+        // Miami
+        "miami": "M20,50 L30,40 L50,40 L60,30 L70,30 L80,40 L80,60 L70,70 L60,70 L50,80 L40,80 L30,70 L20,70 Z",
+        
+        // Monaco
+        "monaco": "M40,30 L60,30 L65,40 L60,50 L65,60 L60,70 L50,70 L45,60 L40,60 L35,50 L40,40 Z",
+        
+        // Canada
+        "villeneuve": "M20,40 L80,40 L85,50 L80,60 L20,60 L15,50 Z",
+        
+        // Silverstone
+        "silverstone": "M40,20 L60,20 L70,30 L75,50 L70,70 L60,80 L40,80 L30,70 L25,50 L30,30 Z",
+        
+        // Austria
+        "red_bull_ring": "M30,60 L40,40 L60,40 L70,50 L60,70 L40,70 Z",
+        
+        // Spa
+        "spa": "M30,70 L40,60 L50,60 L60,50 L70,50 L80,60 L70,80 L50,80 L30,70 Z",
+        
+        // Monza
+        "monza": "M20,50 L80,50 L85,60 L80,70 L20,70 L15,60 Z",
+        
+        // Singapore
+        "marina_bay": "M20,30 L80,30 L80,70 L60,70 L60,60 L40,60 L40,70 L20,70 Z",
+        
+        // COTA
+        "americas": "M20,50 L30,30 L50,30 L60,40 L70,40 L80,50 L70,70 L50,70 L40,60 L30,60 Z",
+        
+        // Vegas
+        "vegas": "M20,20 L80,20 L80,40 L60,40 L60,60 L80,60 L80,80 L20,80 Z",
+        
+        // Yas Marina
+        "yas_marina": "M20,40 L40,40 L40,30 L60,30 L60,40 L80,40 L80,60 L60,60 L60,70 L40,70 L40,60 L20,60 Z",
+        
+        // Generic Loop for missing tracks
+        "generic": "M20,50 Q20,20 50,20 T80,50 T50,80 T20,50"
+    };
+
+    const UI = {
+        path: document.getElementById('track-path'),
+        loading: document.getElementById('loading'),
+        preRace: document.getElementById('pre-race'),
+        liveBox: document.getElementById('live-box'),
+        name: document.getElementById('race-name'),
+        loc: document.getElementById('race-loc'),
+        round: document.getElementById('round'),
+        timer: { d: document.getElementById('d'), h: document.getElementById('h'), m: document.getElementById('m') },
+        lap: { cur: document.getElementById('cur-lap'), tot: document.getElementById('tot-lap') }
+    };
+
+    let raceTime = null;
+
+    async function init() {
+        try {
+            const res = await fetch(API);
+            const data = await res.json();
+            
+            if(!data.MRData || !data.MRData.RaceTable.Races.length) {
+                UI.loading.textContent = "Season Finished";
+                return;
+            }
+
+            const race = data.MRData.RaceTable.Races[0];
+            setupRace(race);
+
+        } catch (e) {
+            console.error(e);
+            UI.loading.textContent = "Connection Lost";
+        }
+    }
+
+    function setupRace(race) {
+        UI.loading.style.display = 'none';
+        
+        // 1. Info
+        UI.name.textContent = race.raceName.replace("Grand Prix", "GP");
+        const d = new Date(`${race.date}T${race.time}`);
+        const dateStr = d.toLocaleDateString(undefined, { weekday:'short', month: 'short', day: 'numeric' });
+        const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        UI.loc.textContent = `${race.Circuit.Location.locality} | ${dateStr} ${timeStr}`;
+        UI.round.textContent = `RD ${race.round}`;
+
+        // 2. Set Vector Path
+        const cId = race.Circuit.circuitId;
+        // Use specific path or generic oval
+        const pathData = TRACK_PATHS[cId] || TRACK_PATHS["generic"];
+        UI.path.setAttribute("d", pathData);
+
+        // 3. Start Timer
+        raceTime = d;
+        setInterval(tick, 1000);
+        tick();
+    }
+
+    function tick() {
+        if (!raceTime) return;
+        
+        const now = new Date();
+        const diff = raceTime - now;
+
+        if (diff > 0) {
+            UI.preRace.style.display = 'flex';
+            UI.liveBox.style.display = 'none';
+
+            const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+            UI.timer.d.textContent = d;
+            UI.timer.h.textContent = h;
+            UI.timer.m.textContent = m;
+        } else if (diff > -9000000) { 
+            UI.preRace.style.display = 'none';
+            UI.liveBox.style.display = 'flex';
+            
+            const ms = Math.abs(diff);
+            const est = Math.ceil(ms / 95000);
+            const max = 60;
+            UI.lap.cur.textContent = est > max ? max : est;
+            UI.lap.tot.textContent = max;
+        } else {
+            UI.preRace.style.display = 'flex';
+            UI.liveBox.style.display = 'none';
+            UI.name.textContent = "FINISHED";
+            document.querySelector('.timer-row').style.display = 'none';
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>
