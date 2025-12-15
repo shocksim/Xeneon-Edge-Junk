@@ -15,7 +15,7 @@ Counter-Strike 2 eSports Tracker
 
 Lunch Roulette
 
-![Lunch picker xeneon edge widget](image/lunch.png)
+![Lunch picker xeneon edge widget](images/lunch.png)
 
 
 NHL Scores
@@ -35,12 +35,12 @@ NFL Scores
 
 Pro Football (Soccer) Scores
 
-![epl plus xeneon edge widget](image/futbol.png)
+![epl plus xeneon edge widget](images/futbol.png)
 
 
 Formula 1 Next Race Tracker
 
-![F1 next race xeneon edge widget](image/f1.png)
+![F1 next race xeneon edge widget](images/f1.png)
 
 
 DOTA2 Esports Tracker
