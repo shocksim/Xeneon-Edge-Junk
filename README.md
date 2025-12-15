@@ -45,4 +45,4 @@ Formula 1 Next Race Tracker
 
 DOTA2 Esports Tracker
 
-![dota2 xeneon edge widget](images/dota2.png)
+![dota2 xeneon edge widget](images/dota.png)
