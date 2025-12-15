@@ -8,6 +8,10 @@ For CS2: Sign up for a Pandascore account for their free API.
 
 For Lunch Roulette: Sign up for a free Google Cloud account to tap into Maps/Places APIs.
 
+The rest of them don't require any extra API keys.
+
+-----------------------------------------------------------------------
+
 Counter-Strike 2 eSports Tracker
 
 ![CS2 Xeneon Edge Widget](images/cs2.png)
