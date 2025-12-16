@@ -1,13 +1,14 @@
 <!DOCTYPE html><html>
 <head>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <title>Radar Widget v3.1 (Robust)</title>
+    <title>Radar Widget v4.2 (30s Update)</title>
     
     <style>
         :root {
             --glass-bg: rgba(10, 15, 20, 0.85);
             --glass-border: rgba(255, 255, 255, 0.1);
             --accent-radar: #00ff9d;
+            --accent-warn: #ffcc00;
             --accent-error: #ff4444;
             --font-ui: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
@@ -44,10 +45,9 @@
             letter-spacing: 2px; text-transform: uppercase; display: flex; align-items: center; gap: 10px;
         }
 
-        /* Dynamic Status Colors */
         .status-dot { width: 8px; height: 8px; background: var(--accent-radar); border-radius: 50%; box-shadow: 0 0 8px var(--accent-radar); animation: blink 2s infinite; }
-        .status-dot.error { background: var(--accent-error); box-shadow: 0 0 8px var(--accent-error); }
-
+        .status-dot.error { background: var(--accent-error); box-shadow: 0 0 8px var(--accent-error); animation: none; }
+        
         .location-input {
             background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
             padding: 6px 15px; border-radius: 20px; color: #ccc;
@@ -87,9 +87,9 @@
 
         .api-warning { font-size: 0.6rem; color: #555; text-align: center; margin-top: 10px; font-style: italic;}
 
-        /* Markers */
-        .leaflet-marker-icon, .plane-icon { transition: transform 1s linear, top 1s linear, left 1s linear; }
-        .plane-svg { transition: transform 0.5s ease; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8)); }
+        /* CSS Transitions for smooth movement */
+        /* Note: With 30s updates, the plane will move for 2s then stop until next update */
+        .leaflet-marker-icon, .plane-icon { transition: transform 2s linear, top 2s linear, left 2s linear; }
         .plane-icon.closest-target path { fill: var(--accent-radar) !important; filter: drop-shadow(0 0 10px var(--accent-radar)); }
         
         .radar-pulse { border: 1px solid var(--accent-radar); border-radius: 50%; animation: expand 4s infinite; box-sizing: border-box; }
@@ -103,8 +103,8 @@
     <div class="radar-widget">
         <div class="radar-header">
             <div class="title" id="statusTitle">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="statusText">LIVE TRAFFIC</span>
+                <div class="status-dot" id="dot"></div>
+                <span id="statusText">LIVE DATA</span>
             </div>
             <input type="text" class="location-input" id="searchBox" placeholder="Search City..." onkeydown="handleSearch(event)">
         </div>
@@ -114,7 +114,7 @@
         <div class="flight-stats" id="flightPanel">
             <div class="tracking-label">Tracking Nearest Flight</div>
             <div class="callsign-large" id="f-callsign">SCANNING</div>
-            <div class="airline-name" id="f-airline">Initializing Radar...</div>
+            <div class="airline-name" id="f-airline">---</div>
             
             <div class="stat-grid">
                 <div class="stat-box">
@@ -130,8 +130,8 @@
                     <div class="stat-val" id="f-dist">---</div>
                 </div>
                  <div class="stat-box">
-                    <div class="stat-label">Type</div>
-                    <div class="stat-val" id="f-country">---</div>
+                    <div class="stat-label">Reg / Tail</div>
+                    <div class="stat-val" id="f-reg">---</div>
                 </div>
             </div>
 
@@ -157,20 +157,14 @@
         const FLIGHTAWARE_API_KEY = ""; 
         // ---------------------
 
-        const OPENSKY_API = "https://opensky-network.org/api/states/all";
+        // USING AIRPLANES.LIVE
+        const ADSB_API_BASE = "https://api.airplanes.live/v2/point";
         
         const AIRLINE_MAP = {
-            "AAL": "American Airlines", "UAL": "United Airlines", "DAL": "Delta Air Lines", "SWA": "Southwest",
+            "AAL": "American Airlines", "UAL": "United Airlines", "DAL": "Delta", "SWA": "Southwest",
             "BAW": "British Airways", "DLH": "Lufthansa", "AFR": "Air France", "KLM": "KLM",
-            "QFA": "Qantas", "UAE": "Emirates", "ETD": "Etihad", "QTR": "Qatar Airways",
-            "JAL": "Japan Airlines", "ANA": "All Nippon", "CPA": "Cathay Pacific", "SIA": "Singapore Airlines",
-            "VIR": "Virgin Atlantic", "VOZ": "Virgin Australia", "ASA": "Alaska Airlines", "JBU": "JetBlue",
-            "NKS": "Spirit Wings", "FFT": "Frontier", "WJA": "WestJet", "ACA": "Air Canada",
-            "AMX": "Aeromexico", "IBE": "Iberia", "AZA": "Alitalia", "SAS": "SAS",
-            "FIN": "Finnair", "EZY": "EasyJet", "RYR": "Ryanair", "THY": "Turkish Airlines",
-            "AIC": "Air India", "CSN": "China Southern", "CCA": "Air China", "CES": "China Eastern",
-            "KOREAN": "Korean Air", "KAL": "Korean Air", "EVA": "EVA Air", "CAL": "China Airlines",
-            "UPS": "UPS Airlines", "FDX": "FedEx", "GTI": "Atlas Air"
+            "UAE": "Emirates", "QTR": "Qatar Airways", "JBU": "JetBlue", "NKS": "Spirit",
+            "UPS": "UPS", "FDX": "FedEx", "GTI": "Atlas Air", "ASQ": "ExpressJet", "SKW": "SkyWest"
         };
 
         let map, planesLayer, radarCircle;
@@ -187,7 +181,9 @@
             planesLayer = L.layerGroup().addTo(map);
             updateHomeMarker();
             fetchPlanes(); 
-            setInterval(fetchPlanes, 10000); 
+            
+            // UPDATED: 30 Seconds Interval
+            setInterval(fetchPlanes, 30000); 
         }
 
         function updateHomeMarker() {
@@ -197,49 +193,52 @@
             }).addTo(map);
         }
 
-        function setStatus(isError, text) {
-            const dot = document.getElementById('statusDot');
-            const txt = document.getElementById('statusText');
-            
-            if(isError) {
-                dot.classList.add('error');
-                txt.style.color = '#ff4444';
-                txt.innerText = text;
-            } else {
-                dot.classList.remove('error');
-                txt.style.color = '#00ff9d';
-                txt.innerText = text;
-            }
+        // Helper to show errors on the UI instead of console
+        function reportError(msg) {
+            document.getElementById('f-callsign').innerText = "ERROR";
+            document.getElementById('f-callsign').style.color = "#ff4444";
+            document.getElementById('f-airline').innerText = msg;
+            document.getElementById('dot').classList.add('error');
+        }
+        function clearError() {
+            document.getElementById('f-callsign').style.color = "#ffffff";
+            document.getElementById('dot').classList.remove('error');
         }
 
         async function fetchPlanes() {
-            // WIDENED SEARCH BOX (0.5 -> 0.8) to ensure we find planes
-            const box = 0.8; 
+            // Radius in Nautical Miles
+            const radius = 25; 
             
             try {
-                const response = await fetch(`${OPENSKY_API}?lamin=${currentLat-box}&lomin=${currentLng-box}&lamax=${currentLat+box}&lomax=${currentLng+box}`);
+                // api.airplanes.live/v2/point/LAT/LON/RADIUS
+                const response = await fetch(`${ADSB_API_BASE}/${currentLat}/${currentLng}/${radius}`);
                 
-                if (!response.ok) {
-                    throw new Error("API Rate Limit");
-                }
-
+                if (!response.ok) throw new Error("Connection Refused");
                 const data = await response.json();
-                setStatus(false, "LIVE TRAFFIC");
 
+                clearError();
                 const activeIcaos = new Set();
                 let closest = null, minDst = Infinity;
 
-                // OpenSky returns null 'states' if no planes are found
-                if (data && data.states) {
-                    data.states.forEach(s => {
-                        const [icao, callsignRaw, country, , , lon, lat, alt, onG, vel, head] = s;
-                        const callsign = callsignRaw.trim();
-                        
-                        if (lat && lon && !onG) {
+                // Airplanes.live returns object with 'ac' array
+                if (data && data.ac) {
+                    data.ac.forEach(p => {
+                        // Normalize Data 
+                        const icao = p.hex;
+                        const callsign = (p.flight || "").trim();
+                        const lat = p.lat;
+                        const lon = p.lon;
+                        // alt_baro (barometric) or alt_geom (geometric)
+                        const alt = p.alt_baro || p.alt_geom || 0; 
+                        const vel = p.gs || 0; // Ground speed in knots
+                        const head = p.track || 0;
+                        const reg = p.r || "---"; // Tail Number
+
+                        if (lat && lon) {
                             const pLoc = L.latLng(lat, lon);
                             const dst = map.distance(L.latLng(currentLat, currentLng), pLoc);
                             
-                            const planeData = { icao, callsign, country, alt, vel, head, lat, lon, dst };
+                            const planeData = { icao, callsign, alt, vel, head, lat, lon, dst, reg };
                             
                             if (dst < minDst) { minDst = dst; closest = planeData; }
                             
@@ -247,13 +246,14 @@
                             activeIcaos.add(icao);
                         }
                     });
-                } else {
-                    // Valid response but empty sky
-                    document.getElementById('f-callsign').innerText = "NO TRAFFIC";
-                    document.getElementById('f-airline').innerText = "Sky is clear nearby";
+                } 
+
+                if (activeIcaos.size === 0) {
+                     document.getElementById('f-callsign').innerText = "NO SIGNAL";
+                     document.getElementById('f-airline').innerText = "No aircraft in range";
                 }
 
-                // Clean up old planes only if API call was successful
+                // Clean up old planes
                 Object.keys(planeRegistry).forEach(icao => {
                     if (!activeIcaos.has(icao)) {
                         planesLayer.removeLayer(planeRegistry[icao]);
@@ -267,9 +267,7 @@
                 }
 
             } catch (e) { 
-                console.error(e);
-                setStatus(true, "API LIMIT / RETRYING");
-                // Do not delete planes if API fails, just keep them frozen until next success
+                reportError("API Limit or Blocked");
             }
         }
 
@@ -313,25 +311,38 @@
         }
 
         function updateStatsPanel(data) {
-            const alt = Math.round(data.alt || 0).toLocaleString();
-            const spd = Math.round((data.vel || 0) * 3.6);
-            const dst = (data.dst / 1000).toFixed(1);
+            // METRIC CONVERSIONS (Note: ADSB provides knots/feet natively)
+            
+            // Feet -> Meters
+            const altM = Math.round((data.alt || 0) * 0.3048).toLocaleString();
+            
+            // Knots -> km/h
+            const spdKm = Math.round((data.vel || 0) * 1.852);
+            
+            // Meters -> km
+            const dstKm = (data.dst / 1000).toFixed(1);
 
             document.getElementById('f-callsign').innerText = data.callsign || "N/A";
-            document.getElementById('f-alt').innerHTML = `${alt}<span class="unit-suffix">m</span>`;
-            document.getElementById('f-speed').innerHTML = `${spd}<span class="unit-suffix">km/h</span>`;
-            document.getElementById('f-dist').innerHTML = `${dst}<span class="unit-suffix">km</span>`;
-            document.getElementById('f-country').innerText = "CIVIL"; 
+            
+            document.getElementById('f-alt').innerHTML = `${altM}<span class="unit-suffix">m</span>`;
+            document.getElementById('f-speed').innerHTML = `${spdKm}<span class="unit-suffix">km/h</span>`;
+            document.getElementById('f-dist').innerHTML = `${dstKm}<span class="unit-suffix">km</span>`;
+            
+            document.getElementById('f-reg').innerText = data.reg;
 
-            const prefix = data.callsign.substring(0, 3).toUpperCase();
-            let airlineName = AIRLINE_MAP[prefix];
-            if (!airlineName) {
-                if (/\d/.test(prefix)) airlineName = "Private / GA";
-                else airlineName = `Unknown (${prefix})`;
+            // Airline Logic
+            let airlineName = "---";
+            if(data.callsign) {
+                const prefix = data.callsign.substring(0, 3).toUpperCase();
+                airlineName = AIRLINE_MAP[prefix];
+                if (!airlineName) {
+                    if (/\d/.test(prefix)) airlineName = "Private / GA";
+                    else airlineName = `${prefix} / Unknown`;
+                }
             }
             document.getElementById('f-airline').innerText = airlineName;
 
-            if (data.callsign !== currentlyLockedCallsign) {
+            if (data.callsign !== currentlyLockedCallsign && data.callsign.length > 3) {
                 currentlyLockedCallsign = data.callsign;
                 fetchRouteData(data.callsign);
             }
@@ -353,6 +364,7 @@
             statusEl.innerText = "Fetching Route...";
             
             try {
+                // FlightAware lookup
                 const res = await fetch(`https://aeroapi.flightaware.com/aeroapi/flights/${callsign}?max_pages=1`, {
                     headers: { "x-apikey": FLIGHTAWARE_API_KEY }
                 });
