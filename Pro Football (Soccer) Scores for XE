@@ -74,6 +74,38 @@
             animation: pulse 2s infinite;
         }
 
+        /* Attribution Header Styling */
+        .attribution-container {
+            margin-left: 8px;
+            padding-left: 8px;
+            border-left: 1px solid #444; /* Subtle divider */
+            display: flex;
+            align-items: center;
+            /* Styling for the plaintext "Powered by" */
+            color: var(--text-sub);
+            font-weight: 400;
+            font-size: 10px;
+            opacity: 0.8;
+        }
+
+        /* Spacing between text and logo link */
+        .attribution-container a {
+            margin-left: 4px;
+            display: flex;
+        }
+
+        .attribution-logo {
+            height: 12px; /* Matches text height */
+            width: auto;
+            vertical-align: middle;
+            transition: opacity 0.2s;
+            display: block;
+        }
+        
+        .attribution-logo:hover {
+            opacity: 1;
+        }
+
         /* --- CONTROLS SECTION --- */
         .controls {
             display: flex;
@@ -215,17 +247,6 @@
             grid-column: 1 / -1;
         }
 
-        /* --- FOOTER --- */
-        .attribution {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 12px;
-            color: #555;
-            border-top: 1px solid #333;
-            padding-top: 10px;
-        }
-        .attribution a { color: #777; text-decoration: none; }
-
         @keyframes pulse {
             0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; }
         }
@@ -243,7 +264,15 @@
     <header>
         <div class="header-top">
             <h2>Matchday Live</h2>
-            <div class="live-indicator"><span class="dot"></span> LIVE DATA</div>
+            <div class="live-indicator">
+                <span class="dot"></span> LIVE DATA
+                <div class="attribution-container">
+                    <span>Powered by</span>
+                    <a href="http://espn.go.com" target="_blank" title="Data provided by ESPN">
+                        <img src="https://a.espncdn.com/redesign/assets/img/logos/espn-404@2x.png" class="attribution-logo" alt="ESPN">
+                    </a>
+                </div>
+            </div>
         </div>
         
         <div class="controls">
@@ -278,10 +307,6 @@
 
     <div id="scoreboard">
         <div class="message">Loading scores...</div>
-    </div>
-
-    <div class="attribution">
-        Data provided by ESPN API | Widget Design v2.1
     </div>
 </div>
 
@@ -323,7 +348,7 @@
         
         // Get checked leagues
         const activeLeagues = Array.from(document.querySelectorAll('.league-checkbox:checked'))
-                                   .map(cb => cb.value);
+                                       .map(cb => cb.value);
 
         if (activeLeagues.length === 0) {
             scoreboard.innerHTML = '<div class="message">Please select at least one league.</div>';
