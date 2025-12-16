@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Commute Timer v4 (Units Added)</title>
+    <style>
+        /* --- CSS STYLES --- */
+        :root {
+            --bg-color: #000000;
+            --card-bg: #1a1a1a;
+            --text-main: #ffffff;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .widget-container {
+            position: relative;
+            text-align: center;
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 16px;
+            width: 300px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border: 1px solid #333;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .route-label {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0;
+        }
+        .icon-btn:hover { color: #fff; }
+
+        .time-display {
+            /* Reduced slightly to fit "mins" text */
+            font-size: 3rem; 
+            font-weight: 700;
+            line-height: 1;
+            margin: 10px 0;
+            letter-spacing: -1px;
+            white-space: nowrap; /* Prevent wrapping */
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-top: 5px;
+            background: rgba(255,255,255,0.1);
+        }
+        .status-good { color: var(--success); background: rgba(34, 197, 94, 0.15); }
+        .status-delay { color: var(--danger); background: rgba(239, 68, 68, 0.15); }
+
+        #settings-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 10;
+            border-radius: 16px;
+            flex-direction: column;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .input-group { margin-bottom: 12px; text-align: left; }
+        .input-group label {
+            display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;
+        }
+        .input-group input {
+            width: 100%; background: #333; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 6px; box-sizing: border-box;
+        }
+        .save-btn {
+            width: 100%; background: var(--accent); border: none; color: white; padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 10px; font-weight: bold;
+        }
+        .close-btn {
+            margin-top: 10px; background: transparent; color: #888; border: none; cursor: pointer; width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="widget-container">
+    <div class="header-row">
+        <button class="icon-btn" onclick="toggleDirection()" title="Swap">⇄</button>
+        <div id="route-label" class="route-label">HOME ➡ WORK</div>
+        <button class="icon-btn" onclick="openSettings()" title="Settings">⚙️</button>
+    </div>
+
+    <div id="time" class="time-display">--</div>
+    <div id="status" class="status-pill">Setup Required</div>
+    
+    <div style="margin-top: 15px; font-size: 0.7rem; color: #555;">
+        Live Traffic Widget
+    </div>
+
+    <div id="settings-overlay">
+        <div class="input-group">
+            <label>Google API Key</label>
+            <input type="password" id="input-api-key" placeholder="Paste Key Here">
+        </div>
+        <div class="input-group">
+            <label>Home Address</label>
+            <input type="text" id="input-home" placeholder="e.g. 123 Main St, City">
+        </div>
+        <div class="input-group">
+            <label>Work Address</label>
+            <input type="text" id="input-work" placeholder="e.g. 500 Enterprise Way">
+        </div>
+        <button class="save-btn" onclick="saveSettings()">SAVE & REFRESH</button>
+        <button class="close-btn" onclick="closeSettings()">Cancel</button>
+    </div>
+</div>
+
+<script>
+    let apiKey = '';
+    let homeAddr = '';
+    let workAddr = '';
+    let isHomeToWork = true;
+    const REFRESH_RATE = 600000; // 10 minutes
+
+    const timeDisplay = document.getElementById('time');
+    const statusPill = document.getElementById('status');
+    const routeLabel = document.getElementById('route-label');
+    const settingsOverlay = document.getElementById('settings-overlay');
+
+    function init() {
+        apiKey = localStorage.getItem('commute_api_key') || '';
+        homeAddr = localStorage.getItem('commute_home_addr') || '';
+        workAddr = localStorage.getItem('commute_work_addr') || '';
+
+        document.getElementById('input-api-key').value = apiKey;
+        document.getElementById('input-home').value = homeAddr;
+        document.getElementById('input-work').value = workAddr;
+
+        if(!apiKey || !homeAddr) {
+            openSettings();
+        } else {
+            fetchCommuteTime();
+            setInterval(fetchCommuteTime, REFRESH_RATE);
+        }
+    }
+
+    async function fetchCommuteTime() {
+        if(!apiKey) return;
+
+        const origin = isHomeToWork ? homeAddr : workAddr;
+        const destination = isHomeToWork ? workAddr : homeAddr;
+
+        statusPill.innerText = 'Updating...';
+        statusPill.className = 'status-pill';
+
+        // 1. Build the Google URL
+        const googleUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial&origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&departure_time=now&key=${apiKey}`;
+        
+        // 2. Wrap it in the CORS Proxy
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(googleUrl)}`;
+
+        try {
+            const response = await fetch(proxyUrl);
+            const data = await response.json();
+
+            if (data.status !== 'OK') {
+                console.error("API Error: ", data);
+                statusPill.innerText = data.error_message || data.status;
+                statusPill.className = 'status-pill status-delay';
+                return;
+            }
+
+            const element = data.rows[0].elements[0];
+            
+            if (element.status === 'OK') {
+                const durationTraffic = element.duration_in_traffic.value; 
+                const durationTypical = element.duration.value; 
+                let cleanTime = element.duration_in_traffic.text;
+
+                // --- CHANGED SECTION ---
+                // Removed the code that deleted "mins". 
+                // We only shorten "hours" to "h" to save space.
+                cleanTime = cleanTime.replace(' hours', 'h').replace(' hour', 'h');
+                
+                timeDisplay.innerText = cleanTime;
+                // -----------------------
+
+                const delayMinutes = Math.round((durationTraffic - durationTypical) / 60);
+
+                if (delayMinutes >= 5) {
+                    statusPill.className = 'status-pill status-delay';
+                    statusPill.innerText = `+${delayMinutes} min delay`;
+                } else if (delayMinutes <= -2) {
+                     statusPill.className = 'status-pill status-good';
+                     statusPill.innerText = 'Green Light';
+                } else {
+                    statusPill.className = 'status-pill status-good';
+                    statusPill.innerText = 'Traffic Normal';
+                }
+            } else {
+                timeDisplay.innerText = "--";
+                statusPill.innerText = "Check Address";
+            }
+        } catch (error) {
+            console.error(error);
+            statusPill.innerText = "Connection Fail";
+            statusPill.className = 'status-pill status-delay';
+        }
+    }
+
+    function openSettings() { settingsOverlay.style.display = 'flex'; }
+    function closeSettings() { settingsOverlay.style.display = 'none'; }
+
+    function saveSettings() {
+        apiKey = document.getElementById('input-api-key').value.trim();
+        homeAddr = document.getElementById('input-home').value.trim();
+        workAddr = document.getElementById('input-work').value.trim();
+
+        localStorage.setItem('commute_api_key', apiKey);
+        localStorage.setItem('commute_home_addr', homeAddr);
+        localStorage.setItem('commute_work_addr', workAddr);
+
+        closeSettings();
+        fetchCommuteTime();
+    }
+
+    function toggleDirection() {
+        if(!homeAddr || !workAddr) return openSettings();
+        isHomeToWork = !isHomeToWork;
+        routeLabel.innerText = isHomeToWork ? "HOME ➡ WORK" : "WORK ➡ HOME";
+        fetchCommuteTime();
+    }
+
+    init();
+</script>
+</body>
+</html>
