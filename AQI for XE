@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern AQI Widget</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --accent-color: #00e400; /* Default Green */
+            --text-color: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at center, var(--accent-color) 0%, var(--bg-color) 70%);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-image 1s ease, background-color 1s ease;
+        }
+
+        header {
+            width: 100%;
+            padding: 15px 20px;
+            box-sizing: border-box;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+
+        #widget-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 1;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .aqi-number {
+            font-size: 8rem;
+            font-weight: 700;
+            line-height: 1;
+            margin: 0;
+        }
+
+        .aqi-status {
+            font-size: 2rem;
+            font-weight: 300;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .meta-info {
+            margin-top: 20px;
+            font-size: 1.2rem; /* Larger for City Name */
+            opacity: 1;
+            font-weight: 600;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 20px;
+            border-radius: 30px;
+            backdrop-filter: blur(4px);
+        }
+        
+        .timestamp {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            opacity: 0.6;
+        }
+
+        /* Settings Button */
+        #settings-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 20;
+            color: white;
+        }
+        #settings-btn:hover { opacity: 1; transform: rotate(90deg); }
+
+        /* Modal */
+        #settings-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 30;
+            backdrop-filter: blur(5px);
+            align-items: center;
+            justify-content: center;
+        }
+        #settings-modal.active { display: flex; }
+
+        .modal-content {
+            background: #1e1e1e;
+            padding: 30px;
+            border-radius: 12px;
+            width: 320px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: left;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .modal-content h3 {
+            margin-top: 0; margin-bottom: 20px;
+            font-weight: 300; text-transform: uppercase;
+            border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;
+        }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-size: 0.8rem; margin-bottom: 5px; opacity: 0.8; }
+        .input-group input {
+            width: 100%; padding: 12px; background: #2c2c2c;
+            border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .input-group small {
+            display: block; font-size: 0.7rem; color: #888; margin-top: 5px;
+        }
+
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        button.btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-cancel { background: transparent; color: #aaa; }
+        .btn-save { background: #00e400; color: #000; }
+        .btn-save:hover { background: #00c200; }
+        .btn-save:disabled { background: #555; color: #888; cursor: not-allowed; }
+
+    </style>
+</head>
+<body>
+
+    <header id="attribution-text">
+        Data: Open-Meteo
+    </header>
+
+    <div id="widget-container">
+        <div class="aqi-number" id="aqi-val">--</div>
+        <div class="aqi-status" id="aqi-desc">Loading...</div>
+        <div class="meta-info" id="location-display">Initializing...</div>
+        <div class="timestamp" id="last-updated"></div>
+    </div>
+
+    <button id="settings-btn" title="Settings">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+    </button>
+
+    <div id="settings-modal">
+        <div class="modal-content">
+            <h3>Change Location</h3>
+            <div class="input-group">
+                <label for="input-city">City Name</label>
+                <input type="text" id="input-city" placeholder="e.g. San Francisco, London">
+                <small>Press Enter or click Save to search</small>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" id="btn-cancel">Cancel</button>
+                <button class="btn btn-save" id="btn-save">Search & Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const UPDATE_INTERVAL = 30 * 60 * 1000; 
+        
+        // DEFAULTS (San Francisco)
+        const DEFAULT_LAT = 37.77;
+        const DEFAULT_LON = -122.41;
+        const DEFAULT_NAME = "San Francisco, United States";
+
+        // APP STATE
+        let currentLat = localStorage.getItem('aqi_lat') || DEFAULT_LAT;
+        let currentLon = localStorage.getItem('aqi_lon') || DEFAULT_LON;
+        let currentLocationName = localStorage.getItem('aqi_name') || DEFAULT_NAME;
+
+        // --- DOM ELEMENTS ---
+        const modal = document.getElementById('settings-modal');
+        const btnSettings = document.getElementById('settings-btn');
+        const btnCancel = document.getElementById('btn-cancel');
+        const btnSave = document.getElementById('btn-save');
+        const inputCity = document.getElementById('input-city');
+        const displayLocation = document.getElementById('location-display');
+        const displayVal = document.getElementById('aqi-val');
+        const displayDesc = document.getElementById('aqi-desc');
+
+        // --- UI & SEARCH LOGIC ---
+
+        btnSettings.addEventListener('click', () => {
+            inputCity.value = ""; // Clear input for fresh search
+            inputCity.focus();
+            modal.classList.add('active');
+        });
+
+        function closeModal() { modal.classList.remove('active'); }
+        btnCancel.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+
+        // Trigger search on Enter key
+        inputCity.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        btnSave.addEventListener('click', performSearch);
+
+        async function performSearch() {
+            const query = inputCity.value.trim();
+            if (!query) return;
+
+            // Update UI to show we are working
+            const originalBtnText = btnSave.innerText;
+            btnSave.innerText = "Searching...";
+            btnSave.disabled = true;
+
+            // Use Open-Meteo Geocoding API
+            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {
+                    const result = data.results[0];
+                    
+                    // Update State
+                    currentLat = result.latitude;
+                    currentLon = result.longitude;
+                    currentLocationName = `${result.name}, ${result.country || ''}`;
+
+                    // Save to LocalStorage
+                    localStorage.setItem('aqi_lat', currentLat);
+                    localStorage.setItem('aqi_lon', currentLon);
+                    localStorage.setItem('aqi_name', currentLocationName);
+
+                    // Close and Refresh
+                    closeModal();
+                    refreshAQI(); 
+                } else {
+                    alert("City not found. Please try a different spelling.");
+                }
+            } catch (error) {
+                console.error("Search failed:", error);
+                alert("Error searching for city.");
+            } finally {
+                btnSave.innerText = originalBtnText;
+                btnSave.disabled = false;
+            }
+        }
+
+        // --- AQI DATA LOGIC ---
+        
+        const EPA_COLORS = {
+            good: 'rgba(0, 228, 0, 0.25)',
+            moderate: 'rgba(255, 255, 0, 0.25)',
+            sensitive: 'rgba(255, 126, 0, 0.25)',
+            unhealthy: 'rgba(255, 0, 0, 0.25)',
+            veryUnhealthy: 'rgba(143, 63, 151, 0.25)',
+            hazardous: 'rgba(126, 0, 35, 0.25)'
+        };
+
+        function getEPAColor(aqi) {
+            if (aqi <= 50) return { color: EPA_COLORS.good, desc: 'Good' };
+            if (aqi <= 100) return { color: EPA_COLORS.moderate, desc: 'Moderate' };
+            if (aqi <= 150) return { color: EPA_COLORS.sensitive, desc: 'Unhealthy for Groups' };
+            if (aqi <= 200) return { color: EPA_COLORS.unhealthy, desc: 'Unhealthy' };
+            if (aqi <= 300) return { color: EPA_COLORS.veryUnhealthy, desc: 'Very Unhealthy' };
+            return { color: EPA_COLORS.hazardous, desc: 'Hazardous' };
+        }
+
+        async function refreshAQI() {
+            // UI Loading State
+            displayVal.innerText = "--";
+            displayDesc.innerText = "Loading...";
+            displayLocation.innerText = currentLocationName; // Show saved name immediately
+
+            const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${currentLat}&longitude=${currentLon}&current=us_aqi`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                const aqi = data.current.us_aqi;
+
+                updateDisplay(aqi);
+
+            } catch (error) {
+                console.error("AQI fetch failed", error);
+                displayDesc.innerText = "Error";
+            }
+        }
+
+        function updateDisplay(aqi) {
+            const info = getEPAColor(aqi);
+            
+            displayVal.innerText = aqi;
+            displayDesc.innerText = info.desc;
+            displayLocation.innerText = currentLocationName;
+
+            // Update Gradient
+            document.documentElement.style.setProperty('--accent-color', info.color);
+            
+            // Timestamp
+            const now = new Date();
+            document.getElementById('last-updated').innerText = 
+                `Updated: ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        }
+
+        // Initialize on Load
+        refreshAQI();
+        
+        // Timer
+        setInterval(refreshAQI, UPDATE_INTERVAL);
+
+    </script>
+</body>
+</html>
