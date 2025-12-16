@@ -4,9 +4,11 @@ These are formatted iframe widgets that you can copy and paste into the "code" f
 
 Feel free to take the code, fork it, play around with modifying it and using the widgets. Happy Holidays!
 
-For CS2: Sign up for a Pandascore account for their free API and you could create widgets for other games they service. 
+For CS2: Sign up for a Pandascore account for their free API and you could create widgets for other games they service. You have to edit your API into the code.
 
-For Lunch Roulette: Sign up for a free Google Cloud account to tap into Maps/Places APIs.
+For Lunch Roulette: Sign up for a free Google Cloud account to tap into 'Places & Places (New) API's enabled, as well as the 'Maps Javascript API'. These will take at least 1-2mins to propogate once you've enabled them. You have to edit your API into the code.
+
+For Live Commute Timer: You need a Google Cloud API key that has the 'Distance Matrix API' enabled. This one has a setup form so you don't have to edit the code.
 
 The rest of them shouldn't require any extra API keys.
 
