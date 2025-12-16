@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tube Tracker + Map</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-main: #ffffff;
+            --text-sub: #a0a0a0;
+            --accent: #dc241f; /* TfL Roundel Red */
+            --danger: #ff4d4d;
+        }
+
+        body {
+            font-family: "Johnston100", "Gill Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 95vh;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            flex-shrink: 0; 
+        }
+
+        h2 { margin: 0; font-size: 1.1rem; }
+
+        select {
+            background: var(--card-bg);
+            color: var(--text-main);
+            border: 1px solid #444;
+            padding: 5px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            max-width: 160px;
+        }
+
+        /* Map Container */
+        #map-container {
+            height: 180px;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            border: 1px solid #444;
+            flex-shrink: 0;
+            z-index: 1;
+        }
+
+        #map { height: 100%; width: 100%; background: #222; }
+
+        /* Train List */
+        #train-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 2px;
+        }
+
+        .train-card {
+            background-color: var(--card-bg);
+            padding: 10px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 5px solid transparent;
+            font-size: 0.9rem;
+        }
+        
+        .train-info { display: flex; flex-direction: column; width: 65%; }
+        .train-dest { font-weight: bold; font-size: 0.95rem; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        .train-len { font-size: 0.75rem; color: var(--text-sub); }
+
+        .train-times { text-align: right; width: 35%; }
+        .primary-time { font-size: 1.1rem; font-weight: bold; color: var(--text-main); }
+        .next-times { font-size: 0.7rem; color: var(--text-sub); }
+
+        .status-msg { text-align: center; color: var(--text-sub); margin-top: 20px; font-size: 0.85rem; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2>London <span style="font-weight:normal; font-size:0.8em; color:#888;">Live</span></h2>
+        <select id="station-select">
+            <option value="" disabled selected>Loading Stations...</option>
+        </select>
+    </header>
+
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+    <div id="train-list">
+        <div class="status-msg">Initializing Transport for London data...</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+
+<script>
+    // TfL Open Data API (No key required for low volume, but rate limited)
+    const API_URL = 'https://api.tfl.gov.uk'; 
+    const STATION_SELECT = document.getElementById('station-select');
+    const TRAIN_LIST = document.getElementById('train-list');
+    
+    // Official Tube Line Colors
+    const LINE_COLORS = {
+        'bakerloo': '#B36305',
+        'central': '#E32017',
+        'circle': '#FFD300',
+        'district': '#00782A',
+        'hammersmith-city': '#F3A9BB',
+        'jubilee': '#A0A5A9',
+        'metropolitan': '#9B0056',
+        'northern': '#000000',
+        'piccadilly': '#003688',
+        'victoria': '#0098D4',
+        'waterloo-city': '#95CDBA'
+    };
+
+    // State
+    let currentStationId = localStorage.getItem('tfl_fav_station') || '940GZZLUOXC'; // Default: Oxford Circus
+    let stationData = {}; // Stores lat/long for stations
+    let map, currentMarker;
+
+    // --- 1. Initialize Map (London Center) ---
+    function initMap() {
+        // Center on London
+        map = L.map('map', { zoomControl: false }).setView([51.5074, -0.1278], 13);
+
+        // Add Dark Matter Tiles
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OSM &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+    }
+
+    // --- 2. Fetch Stations ---
+    async function fetchStations() {
+        try {
+            // Fetch all StopPoints for mode 'tube'
+            const response = await fetch(`${API_URL}/StopPoint/Mode/tube`);
+            const data = await response.json();
+            
+            // TfL returns a huge object. We need stopPoints array.
+            // Filter to ensure we only get top-level stations (Naptan Metro)
+            const stations = data.stopPoints
+                .filter(s => s.stopType === 'NaptanMetroStation')
+                .sort((a, b) => a.commonName.localeCompare(b.commonName));
+
+            STATION_SELECT.innerHTML = '';
+            
+            stations.forEach(stn => {
+                // Store data for map logic
+                stationData[stn.id] = {
+                    name: stn.commonName,
+                    lat: stn.lat,
+                    lng: stn.lon
+                };
+
+                const option = document.createElement('option');
+                option.value = stn.id;
+                // Clean up "Underground Station" from name if present
+                option.textContent = stn.commonName.replace(' Underground Station', '');
+                
+                if(stn.id === currentStationId) option.selected = true;
+                STATION_SELECT.appendChild(option);
+            });
+
+            // Trigger initial load
+            updateStationView();
+            updateDepartures();
+
+        } catch (error) {
+            console.error('Error fetching stations:', error);
+            STATION_SELECT.innerHTML = '<option>API Error</option>';
+            TRAIN_LIST.innerHTML = '<div class="status-msg">Failed to load station list.</div>';
+        }
+    }
+
+    // --- 3. Update Map View ---
+    function updateStationView() {
+        if (!stationData[currentStationId]) return;
+
+        const coords = stationData[currentStationId];
+        const latLng = [coords.lat, coords.lng];
+
+        // Move map
+        map.setView(latLng, 15);
+
+        // Remove old marker
+        if (currentMarker) map.removeLayer(currentMarker);
+
+        // Add new marker (Tube Red)
+        currentMarker = L.circleMarker(latLng, {
+            color: '#dc241f',
+            fillColor: '#dc241f',
+            fillOpacity: 0.8,
+            radius: 8
+        }).addTo(map);
+    }
+
+    // --- 4. Fetch Real-Time Arrivals ---
+    async function updateDepartures() {
+        if (!currentStationId) return;
+        
+        try {
+            const response = await fetch(`${API_URL}/StopPoint/${currentStationId}/Arrivals`);
+            const arrivals = await response.json();
+            
+            if (!arrivals || arrivals.length === 0) {
+                TRAIN_LIST.innerHTML = '<div class="status-msg">No trains scheduled.</div>';
+                return;
+            }
+
+            renderDepartures(arrivals);
+
+        } catch (error) {
+            console.error('Error fetching arrivals:', error);
+        }
+    }
+
+    function renderDepartures(arrivals) {
+        TRAIN_LIST.innerHTML = ''; 
+
+        // 1. Sort by time (TfL gives timeToStation in seconds)
+        arrivals.sort((a, b) => a.timeToStation - b.timeToStation);
+
+        // 2. Group by Line + Destination to mimic the BART tracker layout
+        // Key format: "LineName|DestinationName|Platform"
+        const groups = {};
+
+        arrivals.forEach(train => {
+            const key = `${train.lineName}|${train.destinationName}|${train.platformName}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    lineId: train.lineId,
+                    lineName: train.lineName,
+                    dest: train.destinationName,
+                    plat: train.platformName,
+                    times: []
+                };
+            }
+            // Convert seconds to minutes
+            const mins = Math.floor(train.timeToStation / 60);
+            groups[key].times.push(mins === 0 ? 'Due' : mins);
+        });
+
+        // 3. Render Groups
+        // Convert object back to array to sort groups by their first train's arrival time
+        const sortedGroups = Object.values(groups).sort((a, b) => {
+            const timeA = a.times[0] === 'Due' ? 0 : a.times[0];
+            const timeB = b.times[0] === 'Due' ? 0 : b.times[0];
+            return timeA - timeB;
+        });
+
+        sortedGroups.forEach(group => {
+            const nextTrain = group.times[0];
+            const followingTrains = group.times.slice(1).join(', ');
+            
+            // Get color from dictionary or fallback to grey
+            const lineColor = LINE_COLORS[group.lineId] || '#666';
+
+            const card = document.createElement('div');
+            card.className = 'train-card';
+            card.style.borderLeftColor = lineColor;
+
+            // Format Destination (remove "Underground Station" to save space)
+            const cleanDest = group.dest.replace(' Underground Station', '');
+            // Simplify Line Name (e.g. "Bakerloo" is fine, but sometimes helpful to show)
+            
+            card.innerHTML = `
+                <div class="train-info">
+                    <span class="train-dest">${cleanDest}</span>
+                    <span class="train-len" style="color:${lineColor}">${group.lineName} • ${group.plat}</span>
+                </div>
+                <div class="train-times">
+                    <div class="primary-time" style="color:${lineColor}">${nextTrain === 'Due' ? 'Due' : nextTrain + ' min'}</div>
+                    <div class="next-times">${followingTrains ? followingTrains + ' min' : ''}</div>
+                </div>
+            `;
+            TRAIN_LIST.appendChild(card);
+        });
+    }
+
+    // --- Event Listeners ---
+    STATION_SELECT.addEventListener('change', (e) => {
+        currentStationId = e.target.value;
+        localStorage.setItem('tfl_fav_station', currentStationId);
+        TRAIN_LIST.innerHTML = '<div class="status-msg">Loading...</div>';
+        
+        updateStationView(); 
+        updateDepartures();  
+    });
+
+    // --- Init ---
+    initMap();
+    fetchStations();
+    
+    // Auto-refresh every 30 seconds (TfL standard cache time is 30s)
+    setInterval(updateDepartures, 30000);
+
+</script>
+</body>
+</html>
