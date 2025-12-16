@@ -57,7 +57,6 @@
             display: flex;
             align-items: baseline;
             justify-content: center;
-            /* Gap is handled via margins now to allow for smooth collapse */
             transform: translateY(-10px);
             text-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
@@ -83,7 +82,7 @@
             transform: translateY(-20px);
             animation: breathe 3s infinite ease-in-out;
             font-weight: 800;
-            margin: 0 10px; /* Explicit margin instead of gap */
+            margin: 0 10px;
         }
 
         .ampm {
@@ -91,21 +90,18 @@
             font-weight: 800;
             color: #d1d1d1;
             
-            /* --- RECENTERING LOGIC --- */
+            /* Recentering Logic */
             margin-left: 10px; 
-            max-width: 150px; /* Full width state */
+            max-width: 150px; 
             opacity: 1;
-            overflow: hidden; /* Needed for width transition */
+            overflow: hidden; 
             white-space: nowrap;
-            
-            /* Smoothly animate width and margins to 0 */
             transition: 
                 max-width 0.6s cubic-bezier(0.22, 1, 0.36, 1),
                 margin-left 0.6s cubic-bezier(0.22, 1, 0.36, 1),
                 opacity 0.4s ease;
         }
 
-        /* The class added via JS when toggled off */
         .ampm.hidden {
             max-width: 0px;
             margin-left: 0px;
@@ -125,14 +121,9 @@
             border: none;
             padding: 0;
         }
-        .settings-trigger:hover {
-            opacity: 1;
-            transform: rotate(90deg);
-        }
+        .settings-trigger:hover { opacity: 1; transform: rotate(90deg); }
         .settings-trigger svg {
-            width: 40px;
-            height: 40px;
-            fill: white;
+            width: 40px; height: 40px; fill: white;
             filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
         }
 
@@ -154,35 +145,30 @@
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .settings-menu.active {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-            pointer-events: auto;
+            opacity: 1; transform: translateY(0) scale(1); pointer-events: auto;
         }
 
         .setting-item { margin-bottom: 20px; }
         .setting-item:last-child { margin-bottom: 0; }
+        
         .setting-label {
-            display: block;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #888;
-            margin-bottom: 8px;
-            font-weight: 700;
+            display: block; font-size: 0.75rem; text-transform: uppercase;
+            letter-spacing: 1px; color: #888; margin-bottom: 8px; font-weight: 700;
         }
 
+        /* Upload Button */
         input[type="file"] { display: none; }
         .upload-btn {
             display: flex; align-items: center; justify-content: center;
             width: 100%; padding: 10px;
             background: rgba(255,255,255,0.1);
             border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 6px; color: white;
-            font-size: 0.9rem; cursor: pointer;
+            border-radius: 6px; color: white; font-size: 0.9rem; cursor: pointer;
             transition: background 0.2s;
         }
         .upload-btn:hover { background: rgba(255,255,255,0.2); }
 
+        /* Range Slider */
         input[type=range] { width: 100%; -webkit-appearance: none; background: transparent; }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none; height: 16px; width: 16px;
@@ -193,6 +179,7 @@
             background: rgba(255,255,255,0.2); border-radius: 2px;
         }
 
+        /* Toggles */
         .toggle-row { display: flex; justify-content: space-between; align-items: center; }
         .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -269,6 +256,16 @@
 
         <div class="setting-item">
             <div class="toggle-row">
+                <span class="setting-label">24-Hour Clock</span>
+                <label class="switch">
+                    <input type="checkbox" id="formatToggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="setting-item">
+            <div class="toggle-row">
                 <span class="setting-label">Show AM/PM</span>
                 <label class="switch">
                     <input type="checkbox" id="ampmToggle" checked>
@@ -287,9 +284,10 @@
         const blurRange = document.getElementById('blurRange');
         const blurValText = document.getElementById('blurVal');
         const ampmToggle = document.getElementById('ampmToggle');
+        const formatToggle = document.getElementById('formatToggle');
         const ampmDisplay = document.getElementById('ampm');
 
-        // Toggle Menu
+        // --- MENU INTERACTION ---
         settingsBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             settingsMenu.classList.toggle('active');
@@ -301,7 +299,7 @@
             }
         });
 
-        // Background
+        // --- BACKGROUND ---
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -313,7 +311,7 @@
             }
         });
 
-        // Blur
+        // --- BLUR ---
         blurRange.addEventListener('input', (e) => {
             const val = e.target.value;
             glassLayer.style.backdropFilter = `blur(${val}px)`;
@@ -321,22 +319,32 @@
             blurValText.innerText = `${val}px`;
         });
 
-        // AM/PM Toggle (Updates class instead of just opacity)
+        // --- TOGGLE STATE ---
         let showAmPm = true;
+        let is24Hour = false;
+
         ampmToggle.addEventListener('change', (e) => {
             showAmPm = e.target.checked;
             updateAmPmVisibility();
         });
 
+        formatToggle.addEventListener('change', (e) => {
+            is24Hour = e.target.checked;
+            updateTime(); // Update time immediately to switch formats
+            updateAmPmVisibility(); // Check if AM/PM should hide
+        });
+
         function updateAmPmVisibility() {
-            if (showAmPm) {
-                ampmDisplay.classList.remove('hidden');
-            } else {
+            // If 24h mode is ON, force hide AM/PM. 
+            // Otherwise, respect the Show AM/PM toggle.
+            if (is24Hour || !showAmPm) {
                 ampmDisplay.classList.add('hidden');
+            } else {
+                ampmDisplay.classList.remove('hidden');
             }
         }
 
-        // Clock Logic
+        // --- CLOCK LOGIC ---
         let prevHours = null;
         let prevMinutes = null;
 
@@ -344,14 +352,23 @@
             const now = new Date();
             let rawHours = now.getHours();
             let rawMinutes = now.getMinutes();
+            let hStr;
 
+            // AM/PM Text Update
             const ampmString = rawHours >= 12 ? 'PM' : 'AM';
             ampmDisplay.innerText = ampmString;
 
-            let displayHours = rawHours % 12;
-            displayHours = displayHours ? displayHours : 12; 
+            if (is24Hour) {
+                // 24-Hour Logic (00 - 23)
+                // We padStart so 1:00 becomes 01:00 for visual balance
+                hStr = rawHours.toString().padStart(2, '0');
+            } else {
+                // 12-Hour Logic (1 - 12)
+                let displayHours = rawHours % 12;
+                displayHours = displayHours ? displayHours : 12; 
+                hStr = displayHours.toString(); 
+            }
             
-            let hStr = displayHours.toString(); 
             let mStr = rawMinutes.toString().padStart(2, '0');
 
             if (hStr !== prevHours) {
