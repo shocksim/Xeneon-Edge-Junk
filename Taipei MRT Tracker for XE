@@ -1,14 +1,21 @@
+<!DOCTYPE html>
 <!-- How to get this working with Real Data:
 
-    Go to the TDX Member Center and sign up (it's free).
+
+    Go to the TDX Member Center (https://tdx.transportdata.tw/register/general) and sign up (it's free).
+
 
     Get your Client ID and Client Secret.
 
+
     Paste them into the new fields in your widget settings.
+
 
     The widget will immediately switch from "Demo Mode" to "Live Mode." --> 
 
-<!DOCTYPE html>
+
+
+
 <html>
 <head>
 <style>
@@ -28,12 +35,13 @@
     --bg-brightness: 100%;
     
     /* Line Colors */
-    --line-red: #E3002C;
-    --line-blue: #005EB8;
-    --line-green: #008659;
-    --line-orange: #F8B61C;
-    --line-brown: #C48C31;
-    --line-circular: #FFD306;
+    --line-R: #E3002C;   /* Red */
+    --line-BL: #005EB8;  /* Blue */
+    --line-G: #008659;   /* Green */
+    --line-O: #F8B61C;   /* Orange */
+    --line-BR: #C48C31;  /* Brown */
+    --line-Y: #FFD306;   /* Circular (Yellow) */
+    --line-default: #999;
   }
 
   /* Light Mode */
@@ -81,14 +89,16 @@
     box-shadow: 0 10px 40px var(--glass-shadow);
     position: relative;
     transition: all 0.3s ease;
+    display: flex; flex-direction: column;
+    max-height: 80vh; /* Prevent overflow on small screens */
   }
 
-  .header { margin-bottom: 24px; position: relative; z-index: 10; }
-  .label-small { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+  .header { margin-bottom: 24px; position: relative; z-index: 50; flex-shrink: 0; }
+  .label-small { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; }
 
   /* Dropdown Styles */
   .custom-select-wrapper { position: relative; user-select: none; cursor: pointer; }
-  .station-en { font-size: 1.8rem; font-weight: 800; color: var(--text-primary); line-height: 1.1; }
+  .station-en { font-size: 1.8rem; font-weight: 800; color: var(--text-primary); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
   .station-zh { font-size: 1rem; color: var(--text-secondary); font-weight: 500; }
   
   .custom-options {
@@ -100,17 +110,35 @@
     max-height: 300px; overflow-y: auto; z-index: 100;
   }
   .custom-select-wrapper.open .custom-options { opacity: 1; visibility: visible; transform: translateY(0); }
+  
+  .option-group-title {
+    padding: 8px 20px; font-size: 0.7rem; font-weight: 800; color: var(--text-secondary); 
+    background: rgba(0,0,0,0.05); text-transform: uppercase; letter-spacing: 1px;
+    position: sticky; top: 0; backdrop-filter: blur(10px);
+  }
+
   .option { padding: 12px 20px; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); }
   .option:hover { background: rgba(255,255,255,0.1); }
-  .option-name { font-weight: 600; color: var(--text-primary); }
+  .option-name { font-weight: 600; color: var(--text-primary); font-size: 0.95rem; }
   .line-dot { width: 8px; height: 8px; border-radius: 50%; }
 
   /* Train List */
-  .train-list { display: flex; flex-direction: column; gap: 12px; min-height: 200px; }
+  .train-list { 
+    display: flex; flex-direction: column; gap: 12px; 
+    overflow-y: auto; flex-grow: 1; 
+    padding-right: 5px; /* Space for scrollbar */
+    min-height: 200px;
+  }
+  
+  /* Scrollbar styling */
+  .train-list::-webkit-scrollbar, .custom-options::-webkit-scrollbar { width: 6px; }
+  .train-list::-webkit-scrollbar-thumb, .custom-options::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+
   .train-card {
     display: flex; justify-content: space-between; align-items: center;
     background: var(--card-bg); padding: 16px; border-radius: 16px;
     border: 1px solid rgba(255,255,255, 0.1); position: relative; overflow: hidden;
+    flex-shrink: 0;
   }
   .line-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
   .info-group { padding-left: 14px; }
@@ -120,65 +148,45 @@
   .time-unit { font-size: 0.65rem; color: var(--text-secondary); font-weight: 700; }
   .badge { padding: 6px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: white; animation: pulse 2s infinite; }
   
-  /* --- Settings Cog (Fixed Bottom Right) --- */
+  /* --- Settings Cog --- */
   .settings-btn {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 40px; height: 40px;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 50%;
-    cursor: pointer;
-    color: white;
-    display: flex; align-items: center; justify-content: center;
-    transition: 0.3s;
-    z-index: 1000;
+    position: fixed; bottom: 20px; right: 20px; width: 40px; height: 40px;
+    background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 50%;
+    cursor: pointer; color: white; display: flex; align-items: center; justify-content: center;
+    transition: 0.3s; z-index: 1000;
   }
-  .settings-btn:hover { transform: rotate(90deg) scale(1.1); background: var(--line-blue); border-color: var(--line-blue); }
+  .settings-btn:hover { transform: rotate(90deg) scale(1.1); background: var(--line-BL); border-color: var(--line-BL); }
 
-  /* Settings Panel (Fixed Bottom Right) */
+  /* Settings Panel */
   .settings-panel {
-    position: fixed;
-    bottom: 75px;
-    right: 20px;
-    width: 280px;
-    background: rgba(20, 20, 20, 0.9);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 16px;
-    padding: 20px;
-    display: flex; flex-direction: column; gap: 16px;
+    position: fixed; bottom: 75px; right: 20px; width: 300px;
+    background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+    padding: 20px; display: flex; flex-direction: column; gap: 16px;
     transform: translateY(20px); opacity: 0; pointer-events: none;
-    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    z-index: 1000;
+    transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1000;
   }
   .settings-panel.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
   
   .setting-group { display: flex; flex-direction: column; gap: 6px; }
   .setting-label { font-size: 0.7rem; color: #888; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-  
   input[type="text"], input[type="password"] {
     background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1);
     border-radius: 6px; padding: 8px; color: white; font-size: 0.85rem; outline: none;
   }
-  input[type="text"]:focus { border-color: var(--line-blue); background: rgba(255,255,255,0.15); }
+  input[type="text"]:focus { border-color: var(--line-BL); background: rgba(255,255,255,0.15); }
+  input[type="range"] { width: 100%; accent-color: var(--line-BL); }
   
-  input[type="range"] { width: 100%; accent-color: var(--line-blue); }
-  
-  /* Toggle Switch */
   .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
   .switch input { opacity: 0; width: 0; height: 0; }
   .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #555; transition: .4s; border-radius: 34px; }
   .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-  input:checked + .slider { background-color: var(--line-blue); }
+  input:checked + .slider { background-color: var(--line-BL); }
   input:checked + .slider:before { transform: translateX(18px); }
 
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-  
-  /* Loading Spinner */
-  .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid var(--line-blue); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 20px auto; }
+  .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid var(--line-BL); border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite; display: inline-block; margin-right: 5px; }
   @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 </style>
@@ -190,29 +198,26 @@
   <div class="widget-card">
     <div class="header">
       <div class="label-small">
-        <span id="live-indicator" style="color: #666">● DEMO MODE</span>
+        <span>Current Station</span>
+        <span id="live-indicator" style="color: #666; font-size: 0.65rem;">● DEMO MODE</span>
       </div>
       
-      <div class="custom-select-wrapper" onclick="this.classList.toggle('open')">
+      <div class="custom-select-wrapper" id="stationSelectWrapper" onclick="toggleDropdown()">
         <div class="custom-select-trigger">
           <span class="station-en" id="display-en">Taipei Main Stn.</span>
           <span class="station-zh" id="display-zh">台北車站</span>
         </div>
-        <div class="custom-options">
+        
+        <div class="custom-options" id="stationOptionsList">
+          <div class="option-group-title">Favorites</div>
           <div class="option" onclick="selectStation('Taipei Main Stn.', '台北車站', 'BL12')">
-            <span class="option-name">Taipei Main Stn.</span><span class="line-dot" style="background:var(--line-blue)"></span>
+            <span class="option-name">Taipei Main Stn.</span><span class="line-dot" style="background:var(--line-BL)"></span>
           </div>
           <div class="option" onclick="selectStation('Taipei 101', '台北101/世貿', 'R03')">
-            <span class="option-name">Taipei 101</span><span class="line-dot" style="background:var(--line-red)"></span>
+            <span class="option-name">Taipei 101</span><span class="line-dot" style="background:var(--line-R)"></span>
           </div>
           <div class="option" onclick="selectStation('Ximen', '西門', 'BL11')">
-            <span class="option-name">Ximen</span><span class="line-dot" style="background:var(--line-blue)"></span>
-          </div>
-          <div class="option" onclick="selectStation('Songshan', '松山', 'G19')">
-            <span class="option-name">Songshan</span><span class="line-dot" style="background:var(--line-green)"></span>
-          </div>
-          <div class="option" onclick="selectStation('Zhongshan', '中山', 'R11')">
-            <span class="option-name">Zhongshan</span><span class="line-dot" style="background:var(--line-red)"></span>
+            <span class="option-name">Ximen</span><span class="line-dot" style="background:var(--line-BL)"></span>
           </div>
         </div>
       </div>
@@ -264,37 +269,35 @@
 
 <script>
   // --- Data & State ---
-  let currentStationId = 'BL12'; // Default: Taipei Main Stn (Blue Line)
+  let currentStationId = 'BL12'; // Default: Taipei Main Stn
   let tdxToken = null;
+  let allStations = []; // Will store the fetched list
   
-  // Map Line IDs to colors and labels
-  const lineInfo = {
-    'BL': { color: 'var(--line-blue)', name: 'Blue Line' },
-    'R': { color: 'var(--line-red)', name: 'Red Line' },
-    'G': { color: 'var(--line-green)', name: 'Green Line' },
-    'O': { color: 'var(--line-orange)', name: 'Orange Line' },
-    'BR': { color: 'var(--line-brown)', name: 'Brown Line' }
+  const LINE_MAP = {
+    'BL': { color: 'var(--line-BL)', name: 'Blue Line' },
+    'R':  { color: 'var(--line-R)', name: 'Red Line' },
+    'G':  { color: 'var(--line-G)', name: 'Green Line' },
+    'O':  { color: 'var(--line-O)', name: 'Orange Line' },
+    'BR': { color: 'var(--line-BR)', name: 'Brown Line' },
+    'Y':  { color: 'var(--line-Y)', name: 'Circular Line' }
   };
 
-  // --- Mock Data (Fallback) ---
-  const mockData = [
-    { dest: 'Dingpu', line: 'BL', time: 1 },
-    { dest: 'Nangang', line: 'BL', time: 4 },
-    { dest: 'Xiangshan', line: 'R', time: 2 }, 
-    { dest: 'Tamsui', line: 'R', time: 7 }
-  ];
-
-  // --- Auth Logic ---
+  // --- Auth & Init ---
   async function checkAuth() {
     const id = document.getElementById('tdxClientId').value;
     const secret = document.getElementById('tdxClientSecret').value;
 
     if (id && secret) {
-      document.getElementById('live-indicator').innerHTML = '<span class="spinner" style="display:inline-block; width:10px; height:10px; margin:0 5px; border-width: 2px;"></span> CONNECTING...';
+      document.getElementById('live-indicator').innerHTML = '<div class="spinner"></div> CONNECTING...';
       try {
         await getTdxToken(id, secret);
         document.getElementById('live-indicator').innerHTML = '<span style="color: #008659">● LIVE DATA</span>';
+        
+        // 1. Fetch the FULL station list
+        await fetchAllStations(); 
+        // 2. Refresh arrivals for the current station
         refreshData();
+        
       } catch (e) {
         document.getElementById('live-indicator').innerHTML = '<span style="color: #E3002C">● AUTH FAILED</span>';
         console.error(e);
@@ -320,9 +323,59 @@
   }
 
   // --- Fetch Logic ---
+  
+  // New: Fetch List of ALL Stations
+  async function fetchAllStations() {
+    if (!tdxToken) return;
+    
+    const url = `https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/Station/TRTC?$format=JSON`;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${tdxToken}` } });
+    const data = await res.json();
+    
+    // Sort and Group
+    // We want to group by LineID usually, but raw list is fine if sorted
+    allStations = data.map(s => ({
+      id: s.StationID,
+      en: s.StationName.En,
+      zh: s.StationName.Zh_tw,
+      line: s.StationID.replace(/[0-9]/g, '') // Extract 'BL', 'R' etc
+    })).sort((a, b) => a.line.localeCompare(b.line)); // Sort by line code
+    
+    populateDropdown(allStations);
+  }
+
+  // Populate Dropdown with Full List
+  function populateDropdown(stations) {
+    const list = document.getElementById('stationOptionsList');
+    list.innerHTML = ''; // Clear current
+    
+    // Helper to get color
+    const getC = (code) => (LINE_MAP[code] ? LINE_MAP[code].color : '#999');
+
+    let currentLine = '';
+
+    stations.forEach(s => {
+      // Create headers for lines
+      if (s.line !== currentLine) {
+        currentLine = s.line;
+        const lineName = LINE_MAP[currentLine] ? LINE_MAP[currentLine].name : currentLine;
+        list.innerHTML += `<div class="option-group-title" style="color:${getC(currentLine)}">${lineName}</div>`;
+      }
+      
+      const el = document.createElement('div');
+      el.className = 'option';
+      el.onclick = () => selectStation(s.en, s.zh, s.id);
+      el.innerHTML = `
+        <span class="option-name">${s.en}</span>
+        <span class="line-dot" style="background:${getC(s.line)}"></span>
+      `;
+      list.appendChild(el);
+    });
+  }
+
   async function refreshData() {
     const container = document.getElementById('train-container');
-    container.innerHTML = '<div class="spinner"></div>'; // Loading state
+    container.innerHTML = '<div style="display:flex; justify-content:center; padding:20px;"><div class="spinner" style="width:30px; height:30px;"></div></div>';
 
     if (!tdxToken) {
       // Use Mock Data if no token
@@ -332,7 +385,6 @@
 
     try {
       // Real API Call
-      // Filter by StationID and sort by arrival time
       const url = `https://tdx.transportdata.tw/api/basic/v2/Rail/Metro/Station/EstimatedTimeOfArrival/TRTC?$filter=StationID eq '${currentStationId}'&$orderby=EstimateTime asc&$format=JSON`;
       
       const res = await fetch(url, {
@@ -341,24 +393,24 @@
       
       const data = await res.json();
       const processed = data.map(item => {
-        const lineCode = item.LineID; // e.g. "BL"
-        const seconds = item.EstimateTime; // Returns seconds
+        const lineCode = item.LineID;
+        const seconds = item.EstimateTime;
         const minutes = Math.floor(seconds / 60);
         
         return {
-          dest: item.DestinationName.En, // English destination
+          dest: item.DestinationName.En,
           line: lineCode,
           time: minutes
         };
       });
 
-      // Filter out trains that have already left (negative time) and limit to 4
-      const upcoming = processed.filter(t => t.time >= 0).slice(0, 4);
+      // Filter out negative times (trains that just left)
+      const upcoming = processed.filter(t => t.time >= 0).slice(0, 5);
       renderList(upcoming);
 
     } catch (e) {
       console.log("API Error", e);
-      container.innerHTML = '<div style="color:white; text-align:center;">Data Error<br><small>Check API Keys</small></div>';
+      container.innerHTML = '<div style="color:rgba(255,255,255,0.7); text-align:center; padding:20px;">Data Error<br><small>Check connection</small></div>';
     }
   }
 
@@ -368,12 +420,12 @@
     container.innerHTML = '';
 
     if (trains.length === 0) {
-      container.innerHTML = '<div style="color:rgba(255,255,255,0.5); text-align:center; padding:20px;">No trains approaching</div>';
+      container.innerHTML = '<div style="color:rgba(255,255,255,0.5); text-align:center; padding:40px 0;">No trains approaching</div>';
       return;
     }
 
     trains.forEach(t => {
-      const info = lineInfo[t.line] || { color: '#fff', name: 'Metro' };
+      const info = LINE_MAP[t.line] || { color: '#fff', name: 'Metro' };
       
       let rightSide = t.time <= 1 
         ? `<div class="badge" style="background: ${info.color}">Arriving</div>`
@@ -397,8 +449,21 @@
     document.getElementById('display-en').textContent = en;
     document.getElementById('display-zh').textContent = zh;
     currentStationId = id;
+    document.getElementById('stationSelectWrapper').classList.remove('open');
     refreshData();
   }
+  
+  function toggleDropdown() {
+    document.getElementById('stationSelectWrapper').classList.toggle('open');
+  }
+
+  // Default Mock Data
+  const mockData = [
+    { dest: 'Dingpu', line: 'BL', time: 1 },
+    { dest: 'Nangang', line: 'BL', time: 4 },
+    { dest: 'Xiangshan', line: 'R', time: 2 }, 
+    { dest: 'Tamsui', line: 'R', time: 7 }
+  ];
 
   // Initial Load
   renderList(mockData);
