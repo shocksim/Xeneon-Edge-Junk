@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BART Tracker + Map</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-main: #ffffff;
+            --text-sub: #a0a0a0;
+            --accent: #00a8e8;
+            --danger: #ff4d4d;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 95vh;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            flex-shrink: 0; 
+        }
+
+        h2 { margin: 0; font-size: 1.1rem; }
+
+        select {
+            background: var(--card-bg);
+            color: var(--text-main);
+            border: 1px solid #444;
+            padding: 5px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            max-width: 140px;
+        }
+
+        /* Map Container */
+        #map-container {
+            height: 180px; /* Fixed height for map */
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            border: 1px solid #444;
+            flex-shrink: 0;
+            z-index: 1; /* Ensure map stays below custom overlays if any */
+        }
+
+        #map { height: 100%; width: 100%; background: #222; }
+
+        /* Train List */
+        #train-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 2px; /* tiny padding for scrollbar */
+        }
+
+        .train-card {
+            background-color: var(--card-bg);
+            padding: 10px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 5px solid transparent;
+            font-size: 0.9rem;
+        }
+        
+        .train-info { display: flex; flex-direction: column; }
+        .train-dest { font-weight: bold; font-size: 0.95rem; margin-bottom: 2px;}
+        .train-len { font-size: 0.75rem; color: var(--text-sub); }
+
+        .train-times { text-align: right; }
+        .primary-time { font-size: 1.1rem; font-weight: bold; color: var(--accent); }
+        .next-times { font-size: 0.7rem; color: var(--text-sub); }
+
+        .status-msg { text-align: center; color: var(--text-sub); margin-top: 20px; font-size: 0.85rem; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2>BART <span style="font-weight:normal; font-size:0.8em; color:#888;">Live</span></h2>
+        <select id="station-select">
+            <option value="" disabled selected>Loading...</option>
+        </select>
+    </header>
+
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+    <div id="train-list">
+        <div class="status-msg">Loading station data...</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+
+<script>
+    const API_KEY = 'MW9S-E7SL-26DU-VV8V'; 
+    const STATION_SELECT = document.getElementById('station-select');
+    const TRAIN_LIST = document.getElementById('train-list');
+    
+    // State
+    let currentStation = localStorage.getItem('bart_fav_station') || 'EMBR';
+    let stationData = {}; // Stores lat/long for all stations
+    let map, currentMarker;
+
+    // --- 1. Initialize Map ---
+    function initMap() {
+        // Initialize map centered on SF initially (will update quickly)
+        map = L.map('map', { zoomControl: false }).setView([37.7749, -122.4194], 13);
+
+        // Add Dark Matter Tiles (CartoDB)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+    }
+
+    // --- 2. Fetch Stations & Coordinates ---
+    async function fetchStations() {
+        try {
+            const response = await fetch(`https://api.bart.gov/api/stn.aspx?cmd=stns&key=${API_KEY}&json=y`);
+            const data = await response.json();
+            const stations = data.root.stations.station;
+
+            STATION_SELECT.innerHTML = '';
+            
+            stations.forEach(stn => {
+                // Save coordinates for map lookup later
+                stationData[stn.abbr] = {
+                    name: stn.name,
+                    lat: parseFloat(stn.gtfs_latitude),
+                    lng: parseFloat(stn.gtfs_longitude)
+                };
+
+                const option = document.createElement('option');
+                option.value = stn.abbr;
+                option.textContent = stn.name;
+                if(stn.abbr === currentStation) option.selected = true;
+                STATION_SELECT.appendChild(option);
+            });
+
+            // Trigger initial load
+            updateStationView();
+            updateDepartures();
+
+        } catch (error) {
+            console.error('Error fetching stations:', error);
+            STATION_SELECT.innerHTML = '<option>Error</option>';
+        }
+    }
+
+    // --- 3. Update Map View ---
+    function updateStationView() {
+        if (!stationData[currentStation]) return;
+
+        const coords = stationData[currentStation];
+        const latLng = [coords.lat, coords.lng];
+
+        // Move map
+        map.setView(latLng, 15);
+
+        // Remove old marker if exists
+        if (currentMarker) map.removeLayer(currentMarker);
+
+        // Add new marker (Custom simple circle marker)
+        currentMarker = L.circleMarker(latLng, {
+            color: '#00a8e8',
+            fillColor: '#00a8e8',
+            fillOpacity: 0.8,
+            radius: 8
+        }).addTo(map);
+    }
+
+    // --- 4. Fetch Real-Time Departures ---
+    async function updateDepartures() {
+        if (!currentStation) return;
+        
+        try {
+            const response = await fetch(`https://api.bart.gov/api/etd.aspx?cmd=etd&orig=${currentStation}&key=${API_KEY}&json=y`);
+            const data = await response.json();
+            
+            if (!data.root.station[0].etd) {
+                TRAIN_LIST.innerHTML = '<div class="status-msg">No departures scheduled.</div>';
+                return;
+            }
+
+            renderDepartures(data.root.station[0].etd);
+
+        } catch (error) {
+            console.error('Error fetching ETD:', error);
+        }
+    }
+
+    function renderDepartures(etdList) {
+        TRAIN_LIST.innerHTML = ''; 
+
+        etdList.forEach(dest => {
+            const estimates = Array.isArray(dest.estimate) ? dest.estimate : [dest.estimate];
+            const nextTrain = estimates[0];
+            const followingTrains = estimates.slice(1).map(e => e.minutes).join(', ');
+            const lineColor = nextTrain.hexcolor;
+
+            const card = document.createElement('div');
+            card.className = 'train-card';
+            card.style.borderLeftColor = lineColor;
+
+            card.innerHTML = `
+                <div class="train-info">
+                    <span class="train-dest">${dest.destination}</span>
+                    <span class="train-len">${nextTrain.length} car • Plat ${nextTrain.platform}</span>
+                </div>
+                <div class="train-times">
+                    <div class="primary-time">${nextTrain.minutes === 'Leaving' ? 'Now' : nextTrain.minutes + ' min'}</div>
+                    <div class="next-times">${followingTrains ? followingTrains + ' min' : ''}</div>
+                </div>
+            `;
+            TRAIN_LIST.appendChild(card);
+        });
+    }
+
+    // --- Event Listeners ---
+    STATION_SELECT.addEventListener('change', (e) => {
+        currentStation = e.target.value;
+        localStorage.setItem('bart_fav_station', currentStation);
+        TRAIN_LIST.innerHTML = '<div class="status-msg">Loading...</div>';
+        
+        updateStationView(); // Move map immediately
+        updateDepartures();  // Then fetch trains
+    });
+
+    // --- Init ---
+    initMap();
+    fetchStations();
+    setInterval(updateDepartures, 15000);
+
+</script>
+</body>
+</html>
